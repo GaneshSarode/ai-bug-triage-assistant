@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Optional
 from predict import predict_issue_label
-from datetime import datetime
+from datetime import datetime, timezone
 import uuid
 
 app = FastAPI(title="AI Bug Triage Assistant")
@@ -64,7 +64,7 @@ def predict(issue: IssueRequest):
         "label": label,
         "priority": priority,
         "confidence": confidence,
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
         "feedback": None,
     }
     prediction_history.append(record)
@@ -90,7 +90,7 @@ def batch_predict(request: BatchIssueRequest):
             "label": label,
             "priority": priority,
             "confidence": confidence,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "feedback": None,
         }
         prediction_history.append(record)

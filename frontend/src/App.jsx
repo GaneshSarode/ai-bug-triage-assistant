@@ -22,39 +22,39 @@ export default function App() {
     localStorage.setItem('darkMode', darkMode);
   }, [darkMode]);
 
-  const fetchStats = useCallback(async () => {
+  // Fetch initial stats and history on mount
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadData = async () => {
+      try {
+        const [statsRes, histRes] = await Promise.all([
+          fetch(`${API_BASE}/stats`),
+          fetch(`${API_BASE}/history?limit=10`),
+        ]);
+        if (!cancelled) {
+          if (statsRes.ok) setStats(await statsRes.json());
+          if (histRes.ok) setRecentPredictions((await histRes.json()).history || []);
+        }
+      } catch {
+        // non-critical - API may not be running yet
+      }
+    };
+
+    loadData();
+    return () => { cancelled = true; };
+  }, []);
+
+  const handleNewPrediction = useCallback(async (prediction) => {
+    setRecentPredictions(prev => [prediction, ...prev].slice(0, 10));
+    // Refresh stats after new prediction
     try {
       const res = await fetch(`${API_BASE}/stats`);
-      if (res.ok) {
-        const data = await res.json();
-        setStats(data);
-      }
+      if (res.ok) setStats(await res.json());
     } catch {
-      // stats are non-critical
+      // non-critical
     }
   }, []);
-
-  const fetchHistory = useCallback(async () => {
-    try {
-      const res = await fetch(`${API_BASE}/history?limit=10`);
-      if (res.ok) {
-        const data = await res.json();
-        setRecentPredictions(data.history || []);
-      }
-    } catch {
-      // history is non-critical
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchStats();
-    fetchHistory();
-  }, [fetchStats, fetchHistory]);
-
-  const handleNewPrediction = useCallback((prediction) => {
-    setRecentPredictions(prev => [prediction, ...prev].slice(0, 10));
-    fetchStats();
-  }, [fetchStats]);
 
   return (
     <BrowserRouter>

@@ -162,7 +162,7 @@ export default function Stats() {
                 />
                 <YAxis tick={{ fontSize: 12 }} allowDecimals={false} />
                 <Tooltip
-                  formatter={(value, name) => [value, 'Count']}
+                  formatter={(value) => [value, 'Count']}
                   labelFormatter={label => label.charAt(0).toUpperCase() + label.slice(1) + ' Priority'}
                   contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 20px rgba(0,0,0,0.15)' }}
                 />
