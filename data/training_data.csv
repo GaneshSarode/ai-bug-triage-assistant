@@ -1,0 +1,16 @@
+title,body,label,priority
+Login page not loading,Getting 500 error on login endpoint since yesterday morning,bug,high
+Add dark mode,Would be nice to have a dark mode toggle in settings,feature,medium
+Update API docs,The API documentation for POST /users is outdated,docs,low
+Database connection timeout,App crashes when DB is unreachable timeout after 5 seconds,bug,high
+Implement caching,Add Redis caching to improve API response time,feature,medium
+Fix typos in README,Several spelling mistakes in project README file,docs,low
+Memory leak in background worker,Background job process memory usage keeps increasing,bug,high
+Add two-factor authentication,Implement 2FA for better security,feature,high
+Document environment variables,Need to document all required .env variables,docs,medium
+Search feature broken,Search returns no results even for exact matches,bug,high
+Add user notifications,Users should get email notifications for updates,feature,medium
+Update installation guide,Installation steps are unclear for Windows users,docs,low
+API rate limiting not working,Rate limiter is not enforcing limits correctly,bug,high
+Add webhook support,Allow integrations via webhooks,feature,medium
+Add deployment guide,Write guide for deploying to production,docs,medium
