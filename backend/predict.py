@@ -2,7 +2,7 @@ import pickle
 import os
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.naive_bayes import MultinomialNB
-import pandas as pd
+# import pandas as pd
 
 # Dummy model for now (we'll train later)
 class DummyPredictor:
