@@ -6,7 +6,8 @@ from predict import predict_issue_label
 from datetime import datetime, timezone
 import uuid
 import os
-
+import re
+import httpx
 app = FastAPI(title="AI Bug Triage Assistant")
 
 # Allow frontend to connect
@@ -23,7 +24,15 @@ prediction_history: List[dict] = []
 
 
 # ── Models ────────────────────────────────────────────────────────────────────
-
+class RepoTriageRequest(BaseModel):
+    repo_url: str
+    github_token: Optional[str] = None
+    max_issues: int = 50
+ 
+class ApplyLabelsRequest(BaseModel):
+    repo_url: str
+    github_token: str
+    predictions: List[dict] 
 class IssueRequest(BaseModel):
     title: str
     body: str
@@ -171,7 +180,122 @@ def root():
             "feedback": "POST /feedback",
         },
     }
-
+def _parse_repo_url(url: str):
+    """Extract owner and repo name from a GitHub URL."""
+    match = re.search(r"github\.com/([^/]+)/([^/?\s]+?)(?:\.git)?(?:/|$)", url)
+    if not match:
+        raise HTTPException(status_code=400, detail="Invalid GitHub repo URL. Example: https://github.com/owner/repo")
+    return match.group(1), match.group(2)
+ 
+ 
+@app.post("/triage-repo")
+async def triage_repo(request: RepoTriageRequest):
+    """
+    Fetch all open issues from a public (or private, with token) GitHub repo
+    and predict label + priority for each one.
+    """
+    owner, repo = _parse_repo_url(request.repo_url)
+ 
+    headers = {"Accept": "application/vnd.github.v3+json"}
+    if request.github_token:
+        headers["Authorization"] = f"token {request.github_token}"
+ 
+    # GitHub returns PRs mixed in with issues – we filter them out below.
+    params = {
+        "state": "open",
+        "per_page": min(request.max_issues, 100),
+        "page": 1,
+    }
+ 
+    async with httpx.AsyncClient(timeout=15) as client:
+        gh_response = await client.get(
+            f"https://api.github.com/repos/{owner}/{repo}/issues",
+            headers=headers,
+            params=params,
+        )
+ 
+    if gh_response.status_code == 404:
+        raise HTTPException(status_code=404, detail="Repo not found. Make sure it's public or provide a valid token.")
+    if gh_response.status_code == 401:
+        raise HTTPException(status_code=401, detail="Invalid GitHub token.")
+    if gh_response.status_code != 200:
+        raise HTTPException(status_code=gh_response.status_code, detail="Failed to fetch issues from GitHub.")
+ 
+    raw_issues = gh_response.json()
+ 
+    # Filter out pull requests (GitHub API returns PRs under /issues too)
+    issues = [i for i in raw_issues if "pull_request" not in i]
+ 
+    results = []
+    for issue in issues[: request.max_issues]:
+        label, priority, confidence = predict_issue_label(
+            issue.get("title", ""),
+            issue.get("body", "") or "",
+        )
+        record = {
+            "id": str(uuid.uuid4()),
+            "github_issue_number": issue["number"],
+            "github_issue_url": issue["html_url"],
+            "title": issue["title"],
+            "body": (issue.get("body") or "")[:500],   # truncate for storage
+            "label": label,
+            "priority": priority,
+            "confidence": confidence,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "feedback": None,
+        }
+        prediction_history.append(record)
+        results.append(record)
+ 
+    return {
+        "repo": f"{owner}/{repo}",
+        "repo_url": f"https://github.com/{owner}/{repo}",
+        "total_triaged": len(results),
+        "results": results,
+    }
+ 
+ 
+@app.post("/apply-labels")
+async def apply_labels(request: ApplyLabelsRequest):
+    """
+    Apply the AI-predicted labels back to the actual GitHub issues.
+    Requires a GitHub personal access token with `repo` scope.
+    """
+    owner, repo = _parse_repo_url(request.repo_url)
+ 
+    headers = {
+        "Authorization": f"token {request.github_token}",
+        "Accept": "application/vnd.github.v3+json",
+    }
+ 
+    applied = 0
+    failed = 0
+ 
+    async with httpx.AsyncClient(timeout=15) as client:
+        for pred in request.predictions:
+            issue_number = pred.get("github_issue_number")
+            if not issue_number:
+                continue
+ 
+            # Build labels list e.g. ["bug", "priority:high"]
+            labels_to_apply = [pred["label"], f"priority:{pred['priority']}"]
+ 
+            resp = await client.post(
+                f"https://api.github.com/repos/{owner}/{repo}/issues/{issue_number}/labels",
+                headers=headers,
+                json={"labels": labels_to_apply},
+            )
+            if resp.status_code in (200, 201):
+                applied += 1
+            else:
+                failed += 1
+ 
+    return {
+        "applied": applied,
+        "failed": failed,
+        "total": len(request.predictions),
+        "message": f"Applied labels to {applied} of {len(request.predictions)} issues.",
+    }
 
 if __name__ == "__main__":
     import uvicorn
