@@ -8,7 +8,7 @@ if api_key:
     genai.configure(api_key=api_key)
 
 # We use the faster, cost-effective flash model
-model = genai.GenerativeModel('gemini-1.5-flash')
+model = genai.GenerativeModel('gemini-2.0-flash')
 
 def predict_issue_label(title: str, body: str):
     """
